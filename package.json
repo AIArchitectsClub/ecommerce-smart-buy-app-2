@@ -8,6 +8,8 @@
     "build": "vite build",
     "start": "node server/index.js",
     "db:setup": "node server/db/setup.js",
+    "perf:smoke": "node perf/run.mjs smoke",
+    "perf:load": "node perf/run.mjs load",
     "lint": "oxlint",
     "preview": "vite preview"
   },

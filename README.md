@@ -25,7 +25,29 @@ npm run build   # builds the frontend into dist/
 npm start       # serves the built frontend + API on one port (PORT env var, default 3001)
 ```
 
+## Performance testing (k6)
+
+`perf/` holds a repeatable load-test suite sized to this app's NFRs
+(5 TPS today, 10 TPS future-projected; p95<300ms browse/auth, p95<600ms
+checkout). Requires [k6](https://k6.io) on PATH.
+
+```bash
+npm run perf:smoke          # short, low-rate sanity check
+npm run perf:load           # sustained run at today's NFR-derived rate (5 TPS)
+PERF_TARGET_TPS=10 npm run perf:load   # re-run at the future-projected rate
+```
+
+Each run builds and boots the real production artifact, runs k6 against
+it, then automatically deletes the perf-tagged test users/orders it
+created and restores any stock they consumed — safe to run repeatedly
+against the same database. Reports land in `perf/results/` (gitignored):
+`*-report-<runId>.html` for a human-readable breakdown, `*-raw-<runId>.json`
+for the full time series to dig into a threshold breach. A failing
+threshold exits non-zero, so `npm run perf:load` is a valid pre-merge CI
+gate.
+
 ## Project layout
 
 - `src/` — React frontend (catalog browsing, cart, multi-stage checkout, receipts)
 - `server/` — Express API + Neon Postgres access (`server/db.js`, `server/routes/*`, `server/db/schema.sql`)
+- `perf/` — k6 load-test suite (see above)
