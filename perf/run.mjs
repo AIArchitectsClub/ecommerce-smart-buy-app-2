@@ -1,17 +1,25 @@
 // Orchestrates a full perf-test run so `npm run perf:smoke` / `perf:load`
-// is genuinely one command: build the real production artifact, boot it,
-// wait for it to be healthy, run k6 against it, tear the server down, then
-// clean up any perf-tagged data the run created — regardless of whether
-// the k6 run passed or failed. Exits with k6's own exit code so a CI job
-// running this script is gated by the NFR thresholds automatically.
+// is genuinely one command: build the real production artifact, boot it
+// against a NON-PRODUCTION database only, run k6 against it, tear the
+// server down, then clean up any perf-tagged data the run created —
+// regardless of whether the k6 run passed or failed. Exits with k6's own
+// exit code so a CI job running this script is gated by the NFR
+// thresholds automatically.
+//
+// This script structurally cannot boot the server against the app's own
+// DATABASE_URL — see loadPerfDatabaseUrl(), which requires a separate
+// .env.perf and hard-fails if it's missing or matches the app's real DB.
 import { spawn, spawnSync } from 'node:child_process'
 import { mkdirSync } from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
+import { loadPerfDatabaseUrl } from './lib/perf-env.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const repoRoot = path.join(__dirname, '..')
 mkdirSync(path.join(__dirname, 'results'), { recursive: true })
+
+const PERF_DATABASE_URL = loadPerfDatabaseUrl(repoRoot)
 
 const mode = process.argv[2]
 if (mode !== 'smoke' && mode !== 'load') {
@@ -62,10 +70,10 @@ async function main() {
   console.log('Building production artifact...')
   run('npm', ['run', 'build'], { shell: true })
 
-  console.log(`Starting server on ${BASE_URL}...`)
+  console.log(`Starting server on ${BASE_URL} against the non-production perf database...`)
   const server = spawn('node', ['server/index.js'], {
     cwd: repoRoot,
-    env: { ...process.env, PORT },
+    env: { ...process.env, PORT, DATABASE_URL: PERF_DATABASE_URL },
     stdio: 'inherit',
   })
 

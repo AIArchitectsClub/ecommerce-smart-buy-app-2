@@ -5,7 +5,20 @@
 // exactly the stock those users' orders consumed — an additive restore
 // based on what THIS run actually consumed, not a reset to a hardcoded
 // snapshot, so it doesn't clobber unrelated concurrent activity.
-import { pool } from '../server/db.js'
+//
+// Builds its own pool from .env.perf's PERF_DATABASE_URL — deliberately
+// does NOT import the app's server/db.js pool, which wires itself to the
+// app's own DATABASE_URL. This script must never be able to touch
+// anything but the non-production database confirmed in SKILL.md Step 0a.
+import pg from 'pg'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
+import { loadPerfDatabaseUrl } from './lib/perf-env.js'
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const repoRoot = path.join(__dirname, '..')
+const perfDatabaseUrl = loadPerfDatabaseUrl(repoRoot)
+const pool = new pg.Pool({ connectionString: perfDatabaseUrl, ssl: { rejectUnauthorized: false } })
 
 const runId = process.argv[2]
 if (!runId) {

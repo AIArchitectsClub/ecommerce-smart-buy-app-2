@@ -31,20 +31,34 @@ npm start       # serves the built frontend + API on one port (PORT env var, def
 (5 TPS today, 10 TPS future-projected; p95<300ms browse/auth, p95<600ms
 checkout). Requires [k6](https://k6.io) on PATH.
 
+**Runs against a dedicated non-production database — never the database
+in `.env`.** One-time setup:
+1. `cp .env.perf.example .env.perf` and fill in `PERF_DATABASE_URL` with a
+   connection string for a database that is NOT the one in `.env` (a
+   separate Neon project/branch, a disposable local Postgres instance,
+   etc.).
+2. `npm run perf:db:setup` — creates tables and seeds categories/products
+   in that database (safe to re-run; only needed once per new
+   `PERF_DATABASE_URL`).
+
+`perf/run.mjs` refuses to run at all if `.env.perf` is missing, if
+`PERF_DATABASE_URL` is unset, or if it's identical to `.env`'s
+`DATABASE_URL` — there's no fallback path to the app's real database.
+
 ```bash
 npm run perf:smoke          # short, low-rate sanity check
 npm run perf:load           # sustained run at today's NFR-derived rate (5 TPS)
 PERF_TARGET_TPS=10 npm run perf:load   # re-run at the future-projected rate
 ```
 
-Each run builds and boots the real production artifact, runs k6 against
-it, then automatically deletes the perf-tagged test users/orders it
-created and restores any stock they consumed — safe to run repeatedly
-against the same database. Reports land in `perf/results/` (gitignored):
-`*-report-<runId>.html` for a human-readable breakdown, `*-raw-<runId>.json`
-for the full time series to dig into a threshold breach. A failing
-threshold exits non-zero, so `npm run perf:load` is a valid pre-merge CI
-gate.
+Each run builds and boots the real production artifact against
+`PERF_DATABASE_URL`, runs k6 against it, then automatically deletes the
+perf-tagged test users/orders it created and restores any stock they
+consumed — safe to run repeatedly. Reports land in `perf/results/`
+(gitignored): `*-report-<runId>.html` for a human-readable breakdown,
+`*-raw-<runId>.json` for the full time series to dig into a threshold
+breach. A failing threshold exits non-zero, so `npm run perf:load` is a
+valid pre-merge CI gate.
 
 ## Project layout
 
