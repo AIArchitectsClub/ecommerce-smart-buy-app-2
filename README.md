@@ -3,7 +3,7 @@
 A full-stack e-commerce demo: browse products by category, add to cart,
 check out through a multi-stage flow (shipping → dummy payment → review),
 and get a receipt. Stock quantities decrement atomically when an order is
-placed.
+placed. 
 
 Stack: React + Vite (frontend), Express + Neon Postgres (backend), Better
 Auth (accounts), deployed to Render as a single process.
