@@ -54,7 +54,10 @@ export default function SignUpPage() {
         </button>
       </form>
       <p style={{ marginTop: 14 }}>
-        Already have an account? <Link to="/sign-in">Sign in</Link>
+        Already have an account?{' '}
+        <Link to="/sign-in" state={location.state}>
+          Sign in
+        </Link>
       </p>
     </div>
   )
