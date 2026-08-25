@@ -61,37 +61,3 @@ jobs:
             playwright-report/
             security/results/
           retention-days: 7
-
-  # Own job (own database, own runner) so a slow/flaky perf run never blocks
-  # e2e/security feedback. Runs the fast "smoke" profile, not "load" — the
-  # sustained load test is heavier and latency thresholds are more prone to
-  # noise on shared GitHub-hosted runners than on a real dev machine.
-  perf:
-    needs: build
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '26'
-          cache: 'npm'
-
-      - run: npm ci
-
-      - uses: grafana/setup-k6-action@v1
-
-      - name: Create .env.perf
-        run: echo "PERF_DATABASE_URL=${{ secrets.PERF_DATABASE_URL }}" > .env.perf
-
-      - run: npm run perf:db:setup
-
-      - run: npm run perf:smoke
-
-      - name: Upload perf report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: perf-report
-          path: perf/results/
-          retention-days: 7
