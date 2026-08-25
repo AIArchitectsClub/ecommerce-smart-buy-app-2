@@ -2,12 +2,16 @@ import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { getOrder } from '../lib/api'
 import { formatCurrency } from '../lib/pricing'
+import { useCart } from '../context/CartContext'
+import { useCheckout } from '../context/CheckoutContext'
 
 export default function OrderConfirmationPage() {
   const { orderId } = useParams()
   const [order, setOrder] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const { clearCart } = useCart()
+  const { resetCheckout } = useCheckout()
 
   useEffect(() => {
     let cancelled = false
@@ -25,6 +29,15 @@ export default function OrderConfirmationPage() {
       cancelled = true
     }
   }, [orderId])
+
+  // Cleared here, on the confirmation page's own mount, rather than from
+  // CheckoutReviewPage before navigating here — see the comment in
+  // CheckoutReviewPage.jsx's handlePlaceOrder for why that ordering races.
+  useEffect(() => {
+    clearCart()
+    resetCheckout()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   if (loading) {
     return (

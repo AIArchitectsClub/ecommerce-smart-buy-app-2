@@ -8,8 +8,8 @@ import { computeTotals, formatCurrency } from '../lib/pricing'
 import CheckoutSteps from '../components/CheckoutSteps'
 
 export default function CheckoutReviewPage() {
-  const { cartDetails, cartItems, subtotal, clearCart } = useCart()
-  const { shippingInfo, paymentInfo, resetCheckout } = useCheckout()
+  const { cartDetails, cartItems, subtotal } = useCart()
+  const { shippingInfo, paymentInfo } = useCheckout()
   const { checkStock, refreshProducts } = useCatalog()
   const navigate = useNavigate()
   const [placing, setPlacing] = useState(false)
@@ -44,14 +44,14 @@ export default function CheckoutReviewPage() {
         shipping: shippingInfo,
         payment: { method: paymentInfo.method, cardLast4: paymentInfo.cardLast4 },
       })
-      // Navigate BEFORE clearing cart/checkout state — this page's own
+      // Cart/checkout state is cleared on OrderConfirmationPage's mount, not
+      // here — clearing it here can make this still-mounted page re-render
+      // with an empty cart before the route swap finishes, and its own
       // guard above (`if (cartDetails.length === 0) return <Navigate to
-      // "/cart" />`) reacts to cart state, so clearing it first can win a
-      // race against the route change and bounce back to /cart instead of
-      // the confirmation page.
+      // "/cart" />`) wins the race, bouncing back to /cart instead of the
+      // confirmation page. Only clearing after the new page has actually
+      // mounted avoids the race by construction.
       navigate(`/order-confirmation/${order.id}`)
-      clearCart()
-      resetCheckout()
     } catch (err) {
       if (err.status === 409 && err.details?.insufficient) {
         setStockError(err.details.insufficient)

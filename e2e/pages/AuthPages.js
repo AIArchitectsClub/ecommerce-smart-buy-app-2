@@ -5,7 +5,10 @@ export class SignInPage {
     this.password = page.locator('#password')
     this.submitButton = page.getByRole('button', { name: /sign in/i })
     this.errorAlert = page.locator('.alert-error')
-    this.signUpLink = page.locator('a[href="/sign-up"]')
+    // Not `a[href="/sign-up"]` — that also matches the NavBar's own "Sign Up"
+    // button, which is always visible alongside this page's inline link.
+    // Exact text disambiguates them ("Sign up" here vs NavBar's "Sign Up").
+    this.signUpLink = page.getByRole('link', { name: 'Sign up', exact: true })
   }
 
   async goto() {
