@@ -60,8 +60,36 @@ consumed — safe to run repeatedly. Reports land in `perf/results/`
 breach. A failing threshold exits non-zero, so `npm run perf:load` is a
 valid pre-merge CI gate.
 
+## Observability (OpenTelemetry + Grafana)
+
+The app can export structured logs, traces, and metrics to a local Grafana
+stack (Tempo for traces, Prometheus for metrics, Loki for logs, all bundled
+in `grafana/otel-lgtm`). Off by default; nothing changes unless you opt in.
+
+1. `docker compose -f docker-compose.observability.yml up -d` — starts the
+   stack. Grafana: http://localhost:3000 (admin/admin). Data persists in a
+   named Docker volume across restarts.
+2. In `.env`, set `OTEL_ENABLED=true` (`OTEL_SERVICE_NAME` and
+   `OTEL_EXPORTER_OTLP_ENDPOINT` have sane defaults — see `.env.example`).
+3. `npm run dev` or `npm start` as usual. Every request creates an HTTP span
+   (and a child span per Postgres query), custom counters track orders
+   placed / rejected for insufficient stock, and every pino log line carries
+   the active `trace_id`/`span_id` so a log and its trace are one click apart
+   in Grafana.
+
+`e2e/`, `security/`, and `perf/` force `OTEL_ENABLED=false` (or never load
+the instrumentation entrypoint at all) regardless of `.env`, so those suites
+never cross-contaminate the dev observability stack — same isolation
+principle as the database gating above.
+
+Note: `@opentelemetry/instrumentation-express` is explicitly disabled in
+`server/instrumentation.js` — its Express 5 support currently breaks route
+matching for some routes. HTTP and Postgres spans still cover the full
+request path; only the extra per-route-layer span is missing.
+
 ## Project layout
 
 - `src/` — React frontend (catalog browsing, cart, multi-stage checkout, receipts)
-- `server/` — Express API + Neon Postgres access (`server/db.js`, `server/routes/*`, `server/db/schema.sql`)
+- `server/` — Express API + Neon Postgres access (`server/db.js`, `server/routes/*`, `server/db/schema.sql`, `server/instrumentation.js`, `server/logger.js`)
 - `perf/` — k6 load-test suite (see above)
+- `docker-compose.observability.yml` — local Grafana/Tempo/Prometheus/Loki stack (see Observability above)

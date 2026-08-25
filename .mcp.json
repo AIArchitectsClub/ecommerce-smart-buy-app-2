@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "neon-db": {
+      "type": "http",
+      "url": "https://mcp.neon.tech/mcp?readonly=true&projectId=long-cake-49754482"
+    }
+  }
+}

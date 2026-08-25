@@ -44,9 +44,14 @@ export default function CheckoutReviewPage() {
         shipping: shippingInfo,
         payment: { method: paymentInfo.method, cardLast4: paymentInfo.cardLast4 },
       })
+      // Navigate BEFORE clearing cart/checkout state — this page's own
+      // guard above (`if (cartDetails.length === 0) return <Navigate to
+      // "/cart" />`) reacts to cart state, so clearing it first can win a
+      // race against the route change and bounce back to /cart instead of
+      // the confirmation page.
+      navigate(`/order-confirmation/${order.id}`)
       clearCart()
       resetCheckout()
-      navigate(`/order-confirmation/${order.id}`)
     } catch (err) {
       if (err.status === 409 && err.details?.insufficient) {
         setStockError(err.details.insufficient)

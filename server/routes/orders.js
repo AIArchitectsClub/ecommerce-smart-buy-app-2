@@ -1,10 +1,21 @@
 import { Router } from 'express'
+import { metrics } from '@opentelemetry/api'
 import { pool } from '../db.js'
 import { computeTotals } from '../lib/pricing.js'
 import { requireAuth } from '../middleware/requireAuth.js'
 
 const router = Router()
 router.use(requireAuth)
+
+// No-ops when OTEL_ENABLED isn't set — metrics.getMeter() always returns a
+// valid (no-op) Meter even before/without an SDK started.
+const meter = metrics.getMeter('smartbuy-api')
+const ordersPlacedCounter = meter.createCounter('orders_placed_total', {
+  description: 'Number of orders successfully placed',
+})
+const ordersInsufficientStockCounter = meter.createCounter('orders_insufficient_stock_total', {
+  description: 'Number of order attempts rejected for insufficient stock',
+})
 
 function toOrderJson(order, items) {
   return {
@@ -119,6 +130,7 @@ router.post('/', async (req, res, next) => {
 
     if (insufficient.length > 0) {
       await client.query('ROLLBACK')
+      ordersInsufficientStockCounter.add(1)
       return res.status(409).json({ error: 'Some items are no longer available in the requested quantity', insufficient })
     }
 
@@ -163,6 +175,7 @@ router.post('/', async (req, res, next) => {
     }
 
     await client.query('COMMIT')
+    ordersPlacedCounter.add(1)
     res.status(201).json(toOrderJson(order, insertedItems))
   } catch (err) {
     await client.query('ROLLBACK')
