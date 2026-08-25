@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { signIn } from '../lib/authClient'
+import { signIn, getSession } from '../lib/authClient'
 
 export default function SignInPage() {
   const [email, setEmail] = useState('')
@@ -21,6 +21,8 @@ export default function SignInPage() {
       setError(signInError.message || 'Sign in failed')
       return
     }
+    // See the matching comment in SignUpPage.jsx — same race, same fix.
+    await getSession()
     navigate(redirectTo, { replace: true })
   }
 

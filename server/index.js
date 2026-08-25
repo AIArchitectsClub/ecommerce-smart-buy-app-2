@@ -2,6 +2,7 @@ import express from 'express'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import 'dotenv/config'
+import helmet from 'helmet'
 import pinoHttp from 'pino-http'
 import { toNodeHandler } from 'better-auth/node'
 import { auth } from './auth.js'
@@ -16,6 +17,7 @@ const distDir = path.join(__dirname, '..', 'dist')
 const app = express()
 app.set('trust proxy', 1)
 
+app.use(helmet())
 app.use(pinoHttp({ logger }))
 
 // Must be mounted before express.json() — Better Auth needs the raw body.

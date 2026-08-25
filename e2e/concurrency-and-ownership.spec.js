@@ -53,15 +53,29 @@ test('two users racing for the last unit — exactly one succeeds', async ({ bro
     const reviewA = new CheckoutReviewPage(pageA)
     const reviewB = new CheckoutReviewPage(pageB)
 
+    // Both pages start already sitting on /checkout/review, so a URL-pattern
+    // wait that accepts that same path as a "failure" signal resolves
+    // instantly — before either order request has even completed. Race each
+    // page's OWN outcome signal instead: navigation to order-confirmation
+    // (success) vs. the stock-error alert appearing (failure) — both are
+    // real state changes that can only happen once the request settles.
+    async function outcomeFor(page, review) {
+      return Promise.race([
+        page.waitForURL(/\/order-confirmation\//).then(() => 'success'),
+        review.errorAlert.waitFor({ state: 'visible' }).then(() => 'failure'),
+      ])
+    }
+
+    // Attach both outcome listeners BEFORE clicking either button, so
+    // they're already watching when the requests fire — then fire both
+    // clicks together so the two purchases genuinely race server-side.
+    const outcomeA = outcomeFor(pageA, reviewA)
+    const outcomeB = outcomeFor(pageB, reviewB)
     await Promise.all([reviewA.placeOrder(), reviewB.placeOrder()])
+    const outcomes = await Promise.all([outcomeA, outcomeB])
 
-    const outcomes = await Promise.all([
-      pageA.waitForURL(/\/(order-confirmation\/|checkout\/review)/).then(() => pageA.url()),
-      pageB.waitForURL(/\/(order-confirmation\/|checkout\/review)/).then(() => pageB.url()),
-    ])
-
-    const successes = outcomes.filter((url) => url.includes('/order-confirmation/'))
-    const failures = outcomes.filter((url) => url.includes('/checkout/review'))
+    const successes = outcomes.filter((o) => o === 'success')
+    const failures = outcomes.filter((o) => o === 'failure')
     expect(successes).toHaveLength(1)
     expect(failures).toHaveLength(1)
 
