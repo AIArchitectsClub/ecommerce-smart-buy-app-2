@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { signUp } from '../lib/authClient'
+import { signUp, getSession } from '../lib/authClient'
 
 export default function SignUpPage() {
   const [name, setName] = useState('')
@@ -22,6 +22,11 @@ export default function SignUpPage() {
       setError(signUpError.message || 'Sign up failed')
       return
     }
+    // Wait for the shared session store to actually reflect the new
+    // session before navigating — otherwise a redirect straight into a
+    // RequireAuth-gated route (e.g. back to checkout) can read the old
+    // "signed out" session and bounce right back to /sign-in.
+    await getSession()
     navigate(redirectTo, { replace: true })
   }
 
@@ -54,7 +59,10 @@ export default function SignUpPage() {
         </button>
       </form>
       <p style={{ marginTop: 14 }}>
-        Already have an account? <Link to="/sign-in">Sign in</Link>
+        Already have an account?{' '}
+        <Link to="/sign-in" state={location.state}>
+          Sign in
+        </Link>
       </p>
     </div>
   )

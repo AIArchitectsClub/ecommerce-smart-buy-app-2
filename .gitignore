@@ -13,7 +13,11 @@ dist-ssr
 *.local
 .env
 .env.perf
+.env.e2e
 perf/results/
+playwright-report/
+test-results/
+security/results/
 
 # Editor directories and files
 .vscode/*

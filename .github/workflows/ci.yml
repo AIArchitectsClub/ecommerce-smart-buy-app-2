@@ -6,6 +6,9 @@ on:
   push:
     branches: [main]
 
+env:
+  BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -20,3 +23,41 @@ jobs:
       - run: npm ci
 
       - run: npm run build
+
+  # e2e and security share the same non-production database (E2E_DATABASE_URL,
+  # same as local dev — see security/security.config.js's comment on this).
+  # Kept in one sequential job, not parallel jobs, so they never mutate that
+  # shared DB (stock, orders) at the same time.
+  e2e-and-security:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '26'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - run: npx playwright install --with-deps chromium
+
+      - name: Create .env.e2e
+        run: echo "E2E_DATABASE_URL=${{ secrets.E2E_DATABASE_URL }}" > .env.e2e
+
+      - run: npm run e2e:db:setup
+
+      - run: npm run test:e2e
+
+      - run: npm run security:test
+
+      - name: Upload e2e/security reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-and-security-reports
+          path: |
+            playwright-report/
+            security/results/
+          retention-days: 7

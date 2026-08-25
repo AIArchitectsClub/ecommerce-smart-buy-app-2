@@ -1,0 +1,15 @@
+services:
+  otel-lgtm:
+    image: grafana/otel-lgtm:latest
+    container_name: smartbuy-otel-lgtm
+    ports:
+      - "3000:3000" # Grafana UI (admin/admin)
+      - "4317:4317" # OTLP gRPC
+      - "4318:4318" # OTLP HTTP
+      - "9090:9090" # Prometheus
+      - "3200:3200" # Loki
+    volumes:
+      - otel-lgtm-data:/data
+
+volumes:
+  otel-lgtm-data:
