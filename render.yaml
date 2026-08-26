@@ -14,3 +14,16 @@ services:
         sync: false
       - key: BETTER_AUTH_URL
         sync: false
+      # Observability — ships traces/metrics/logs to Grafana Cloud's free
+      # tier. See README.md's "Observability" section. OTEL_ENABLED=true
+      # here is safe/inert until the two sync:false values below are set;
+      # code-side this is a pure env-var change (no deploy-blocking code
+      # depends on these being present).
+      - key: OTEL_ENABLED
+        value: true
+      - key: OTEL_RESOURCE_ATTRIBUTES
+        value: deployment.environment=production
+      - key: OTEL_EXPORTER_OTLP_ENDPOINT
+        sync: false
+      - key: OTEL_EXPORTER_OTLP_HEADERS
+        sync: false

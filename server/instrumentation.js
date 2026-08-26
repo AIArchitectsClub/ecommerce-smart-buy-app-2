@@ -5,6 +5,16 @@
 import 'dotenv/config'
 
 if (process.env.OTEL_ENABLED === 'true') {
+  // Without this, export failures (bad auth, unreachable endpoint, rejected
+  // requests) fail COMPLETELY SILENTLY — reproduced locally by pointing this
+  // at the real Grafana Cloud OTLP endpoint with a deliberately invalid auth
+  // header: zero output, even after real traffic. Default level is 'error'
+  // so this stays quiet in normal operation; override with OTEL_LOG_LEVEL
+  // (e.g. 'debug') for deeper diagnosis.
+  const { diag, DiagConsoleLogger } = await import('@opentelemetry/api')
+  const { diagLogLevelFromString } = await import('@opentelemetry/core')
+  diag.setLogger(new DiagConsoleLogger(), diagLogLevelFromString(process.env.OTEL_LOG_LEVEL || 'error'))
+
   const { NodeSDK } = await import('@opentelemetry/sdk-node')
   const { getNodeAutoInstrumentations } = await import('@opentelemetry/auto-instrumentations-node')
   const { OTLPTraceExporter } = await import('@opentelemetry/exporter-trace-otlp-http')

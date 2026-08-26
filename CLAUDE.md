@@ -56,6 +56,12 @@ Copy the matching `.env*.example` and fill in a Neon connection string before ru
 
 **Auth**: Better Auth (`server/auth.js`), backed directly by the same Postgres `pool` used for app data (not a separate auth DB). `server/middleware/requireAuth.js` guards order routes server-side; `src/components/RequireAuth.jsx` guards checkout/order routes client-side. Both must be kept in sync — client-side guarding is UX only, not a security boundary.
 
+**Sign-in/sign-up must `await getSession()` before navigating** (`src/pages/SignInPage.jsx`, `SignUpPage.jsx`, exported from `src/lib/authClient.js`). Navigating straight into a `RequireAuth`-gated route right after `signIn.email()`/`signUp.email()` resolves is not safe — Better Auth's reactive `useSession()` store can still be stale at that instant, so `RequireAuth` reads a signed-out session and bounces back to `/sign-in`. `getSession()` is a documented trigger that forces the shared session store to refresh before the redirect. Reproduced and fixed locally; don't remove it as dead-looking code.
+
+**Cart/checkout state is cleared on `OrderConfirmationPage`'s mount, not from `CheckoutReviewPage` before navigating to it.** Clearing it earlier can make the still-mounted review page re-render with an empty cart before the route swap finishes, and its own empty-cart guard (`if (cartDetails.length === 0) return <Navigate to="/cart"/>`) wins the race, bouncing back to `/cart` instead of the confirmation page. This was a real, reproduced bug — keep the clearing on the confirmation page.
+
+**`server/index.js` runs `helmet()`** as the first middleware, giving baseline security headers (X-Content-Type-Options, CSP/X-Frame-Options, HSTS) on every response, API included.
+
 **Pricing logic is duplicated intentionally**: `src/lib/pricing.js` (client, for optimistic UI totals) and `server/lib/pricing.js` (server, authoritative) implement identical `computeTotals` logic. The server always recomputes totals from current DB prices at order time — client-computed totals are never trusted. If you change tax rate, shipping fee, or free-shipping threshold, update **both** files.
 
 **Order placement is the one transactional hot path** (`server/routes/orders.js` `POST /`): within a single DB transaction, it decrements stock per line item with a conditional `UPDATE ... WHERE stock >= $qty`, collects any items that failed (insufficient stock) and rolls back the *entire* order if any line item can't be fulfilled, then inserts the order + order_items using server-computed totals. This is the only place that mutates `products.stock`.
@@ -85,3 +91,13 @@ Three independent Playwright-based suites, each with its own config and its own 
 - **`perf/`** — k6 load tests (`perf/scenarios.js`, `perf/load.js`, `perf/smoke.js`) sized to this app's NFRs (5 TPS today, 10 TPS future-projected; p95<300ms browse/auth, p95<600ms checkout). `perf/run.mjs` builds and boots the real production artifact against `PERF_DATABASE_URL`, runs k6, then auto-cleans perf-tagged users/orders and restores consumed stock. Reports land in `perf/results/` (gitignored). A failing threshold exits non-zero — safe as a pre-merge CI gate.
 
 Each suite boots its own server via Playwright's `webServer` on a distinct port (3001 dev, 3002 e2e default, 3003 security default) with `reuseExistingServer: false` — always fresh, never accidentally reusing a stray server pointed at the wrong database.
+
+## CI
+
+`.github/workflows/ci.yml` runs on every push/PR to `main`: `build` (npm ci + vite build), then `e2e-and-security` (`needs: build`) which runs `test:e2e` then `security:test` **sequentially in the same job** — they share one non-production database (`E2E_DATABASE_URL`), so running them as parallel jobs would let two CI runs mutate the same stock/order rows at once.
+
+`.github/workflows/perf.yml` is **separate and manual-only** (`workflow_dispatch`, not on push/PR) — perf's latency thresholds are more prone to noise on shared GitHub-hosted runners than on a real dev machine, so it shouldn't gate merges. Its smoke-test step also has `continue-on-error: true` for the same reason: a threshold breach is signal to look at, not a reason to fail the workflow run.
+
+Both workflows need repo secrets to do anything beyond `build`: `E2E_DATABASE_URL`, `PERF_DATABASE_URL`, `BETTER_AUTH_SECRET`. `.env.e2e`/`.env.perf` are materialized from these secrets at job start (`echo "...URL=${{ secrets.... }}" > .env.e2e`), since `lib/db-safety.js` reads them from disk, not from `process.env` directly.
+
+If e2e/security CI failures don't reproduce with `npm run test:e2e` / `npm run security:test` locally, treat that as the anomaly to explain, not a reason to relax the test — every failure investigated so far here has been a real bug (a client-side navigation race, a stale session-store read, a missing security header, a test locator matching two elements, a test race condition) rather than CI-environment flakiness.
