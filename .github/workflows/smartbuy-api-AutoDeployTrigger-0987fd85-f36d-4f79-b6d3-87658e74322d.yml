@@ -35,15 +35,12 @@ jobs:
         uses: azure/container-apps-deploy-action@v2
         with:
           appSourcePath: ${{ github.workspace }}
-          _dockerfilePathKey_: _dockerfilePath_
-          _targetLabelKey_: _targetLabel_
+          dockerfilePath: ./Dockerfile
           registryUrl: smartbuyacr2847.azurecr.io
           registryUsername: ${{ secrets.SMARTBUYAPI_REGISTRY_USERNAME }}
           registryPassword: ${{ secrets.SMARTBUYAPI_REGISTRY_PASSWORD }}
           containerAppName: smartbuy-api
           resourceGroup: smartbuy-rg
           imageToBuild: smartbuyacr2847.azurecr.io/smartbuy-api:${{ github.sha }}
-          _buildArgumentsKey_: |
-            _buildArgumentsValues_
 
 
