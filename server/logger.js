@@ -31,6 +31,8 @@ if (otelEnabled) {
 export const logger = pino(
   {
     level: process.env.LOG_LEVEL || 'info',
+    // Session cookies and auth headers must not end up in log storage.
+    redact: { paths: ['req.headers.cookie', 'req.headers.authorization', 'res.headers["set-cookie"]'], censor: '[redacted]' },
     mixin() {
       const spanContext = trace.getActiveSpan()?.spanContext()
       if (!spanContext) return {}
