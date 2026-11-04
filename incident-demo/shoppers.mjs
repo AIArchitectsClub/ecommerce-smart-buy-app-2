@@ -22,11 +22,15 @@ async function loadCatalog() {
 async function shopper(user, catalog, stop) {
   const c = new Client(user)
   let signedIn = await c.signIn().catch(() => false)
+  let lastSignIn = Date.now()
   const count = (r) => (r.ok || r.status < 500 ? stats.ok++ : stats.failed++)
   while (!stop.v) {
     try {
       const roll = Math.random()
-      if (!signedIn && roll < 0.2) signedIn = await c.signIn().catch(() => false)
+      if (!signedIn && Date.now() - lastSignIn > 30000) {
+        lastSignIn = Date.now()
+        signedIn = await c.signIn().catch(() => false)
+      }
       if (roll < 0.45) {
         count(await c.request('GET', '/api/categories'))
         count(await c.request('GET', `/api/products?category=${pick(catalog.categories).id}`))
@@ -60,7 +64,7 @@ async function runShoppers() {
   process.on('SIGTERM', () => (stop.v = true))
   process.on('SIGINT', () => (stop.v = true))
   setInterval(() => console.log(`requests ok=${stats.ok} failed=${stats.failed}`), 15000).unref()
-  await Promise.all(SHOPPERS.map((u, i) => sleep(i * 300).then(() => shopper(u, catalog, stop))))
+  await Promise.all(SHOPPERS.map((u, i) => sleep(i * 4000).then(() => shopper(u, catalog, stop))))
 }
 
 async function expressBurst(n) {

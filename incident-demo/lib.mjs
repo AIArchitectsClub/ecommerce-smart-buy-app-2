@@ -34,12 +34,18 @@ export class Client {
       this.cookies.set(pair.slice(0, i), pair.slice(i + 1))
     }
     const data = await res.json().catch(() => null)
-    return { status: res.status, ok: res.ok, data }
+    return { status: res.status, ok: res.ok, data, retryAfter: res.headers.get('x-retry-after') }
   }
 
+  // A deployed shop (NODE_ENV=production) rate-limits sign-in to about 3 per 10 seconds per address,
+  // so back off when told to instead of hammering it.
   async signIn() {
-    const r = await this.request('POST', '/api/auth/sign-in/email', { email: this.user.email, password: this.user.password })
-    return r.ok
+    for (let i = 0; i < 8; i++) {
+      const r = await this.request('POST', '/api/auth/sign-in/email', { email: this.user.email, password: this.user.password })
+      if (r.status !== 429) return r.ok
+      await sleep(((Number(r.retryAfter) || 4) + 1) * 1000)
+    }
+    return false
   }
 
   async signUp() {
