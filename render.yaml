@@ -23,6 +23,8 @@ services:
         value: "5000"
       - key: EXPRESS_PAY_ENABLED
         value: "true"
+      - key: OTEL_METRIC_EXPORT_INTERVAL
+        value: "10000"
       # Observability — ships traces/metrics/logs to Grafana Cloud's free
       # tier. See README.md's "Observability" section. OTEL_ENABLED=true
       # here is safe/inert until the two sync:false values below are set;

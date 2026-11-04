@@ -34,6 +34,9 @@ if (process.env.OTEL_ENABLED === 'true') {
     traceExporter: new OTLPTraceExporter(),
     metricReader: new PeriodicExportingMetricReader({
       exporter: new OTLPMetricExporter(),
+      // Default is 60s. Rate queries over a 1-minute window (the incident console and alert rule) need at
+      // least two samples, so the exercise sets OTEL_METRIC_EXPORT_INTERVAL=10000.
+      exportIntervalMillis: Number(process.env.OTEL_METRIC_EXPORT_INTERVAL) || 60000,
     }),
     instrumentations: [
       getNodeAutoInstrumentations({
