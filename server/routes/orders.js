@@ -3,6 +3,7 @@ import { metrics } from '@opentelemetry/api'
 import { pool } from '../db.js'
 import { computeTotals } from '../lib/pricing.js'
 import { requireAuth } from '../middleware/requireAuth.js'
+import { expressPayStats } from '../lib/requestInfo.js'
 
 const router = Router()
 router.use(requireAuth)
@@ -182,6 +183,105 @@ router.post('/', async (req, res, next) => {
     next(err)
   } finally {
     client.release()
+  }
+})
+
+// Express Pay: one-click checkout that reuses the shipping address and card from the customer's most
+// recent order. Only available when EXPRESS_PAY_ENABLED=true (part of the incident exercise).
+router.post('/express', async (req, res, next) => {
+  if (process.env.EXPRESS_PAY_ENABLED !== 'true') return res.status(404).json({ error: 'Not found' })
+  const { items } = req.body
+  if (!Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'items must be a non-empty array' })
+  }
+
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+
+    const { rows: previous } = await client.query(
+      'SELECT * FROM orders WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1',
+      [req.user.id],
+    )
+    if (previous.length === 0) {
+      await client.query('ROLLBACK')
+      client.release()
+      return res.status(400).json({ error: 'Express Pay needs a previous order. Place one regular order first.' })
+    }
+    const last = previous[0]
+
+    const decrementedProducts = []
+    const insufficient = []
+    for (const item of items) {
+      const { rows } = await client.query(
+        `UPDATE products SET stock = stock - $2
+         WHERE id = $1 AND stock >= $2
+         RETURNING id, name, price, image, stock`,
+        [item.productId, item.quantity],
+      )
+      if (rows.length === 0) {
+        insufficient.push({ productId: item.productId, requested: item.quantity })
+      } else {
+        decrementedProducts.push({ ...rows[0], quantity: item.quantity })
+      }
+    }
+    if (insufficient.length > 0) {
+      await client.query('ROLLBACK')
+      client.release()
+      return res.status(409).json({ error: 'Some items are no longer available in the requested quantity', insufficient })
+    }
+
+    const subtotal = decrementedProducts.reduce((sum, p) => sum + Number(p.price) * p.quantity, 0)
+    const totals = computeTotals(Math.round(subtotal * 100) / 100)
+
+    const { rows: orderRows } = await client.query(
+      `INSERT INTO orders (
+        user_id, status, subtotal, shipping_fee, tax, total,
+        shipping_full_name, shipping_email, shipping_address, shipping_city, shipping_state, shipping_zip, shipping_phone,
+        payment_method, payment_card_last4
+      ) VALUES ($1, 'paid', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+      RETURNING *`,
+      [
+        req.user.id,
+        totals.subtotal,
+        totals.shippingFee,
+        totals.tax,
+        totals.total,
+        last.shipping_full_name,
+        last.shipping_email,
+        last.shipping_address,
+        last.shipping_city,
+        last.shipping_state,
+        last.shipping_zip,
+        last.shipping_phone,
+        last.payment_method,
+        last.payment_card_last4,
+      ],
+    )
+    const order = orderRows[0]
+
+    const insertedItems = []
+    for (const p of decrementedProducts) {
+      const lineTotal = Math.round(Number(p.price) * p.quantity * 100) / 100
+      const { rows } = await client.query(
+        `INSERT INTO order_items (order_id, product_id, name, image, price, quantity, line_total)
+         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING *`,
+        [order.id, p.id, p.name, p.image, p.price, p.quantity, lineTotal],
+      )
+      insertedItems.push(rows[0])
+    }
+
+    await client.query('COMMIT')
+    ordersPlacedCounter.add(1)
+    expressPayStats.orders += 1
+    expressPayStats.firstAt ??= Date.now()
+    expressPayStats.lastAt = Date.now()
+    req.log.info(`express order placed order_id=${order.id} total=${totals.total}`)
+    res.status(201).json(toOrderJson(order, insertedItems))
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {})
+    client.release()
+    next(err)
   }
 })
 

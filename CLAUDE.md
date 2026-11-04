@@ -101,3 +101,9 @@ Each suite boots its own server via Playwright's `webServer` on a distinct port 
 Both workflows need repo secrets to do anything beyond `build`: `E2E_DATABASE_URL`, `PERF_DATABASE_URL`, `BETTER_AUTH_SECRET`. `.env.e2e`/`.env.perf` are materialized from these secrets at job start (`echo "...URL=${{ secrets.... }}" > .env.e2e`), since `lib/db-safety.js` reads them from disk, not from `process.env` directly.
 
 If e2e/security CI failures don't reproduce with `npm run test:e2e` / `npm run security:test` locally, treat that as the anomaly to explain, not a reason to relax the test — every failure investigated so far here has been a real bug (a client-side navigation race, a stale session-store read, a missing security header, a test locator matching two elements, a test race condition) rather than CI-environment flakiness.
+
+## Incident exercise (optional)
+
+`incident-demo/` holds scripts for an incident-triage exercise: `seed.mjs` creates demo accounts and refills stock, `shoppers.mjs` generates background traffic (or places Express Pay orders with `express N`). Both read the target from `SHOP_URL` (default `http://localhost:3001`).
+
+Setting `EXPRESS_PAY_ENABLED=true` turns on a **deliberately flawed** one-click checkout (`POST /api/orders/express` plus a button on the product page) used as the exercise's fault. It is off by default, so normal runs and the test suites are unaffected. `DB_POOL_MAX` and `DB_CONNECT_TIMEOUT_MS` shrink the database pool and make waits fail fast, which makes the fault visible quickly. Requests are logged as one readable line (`request ok|rejected|failed path=... status=...`), and `db_pool_connections_*` and `http_server_requests_total` metrics are exported when `OTEL_ENABLED=true`.

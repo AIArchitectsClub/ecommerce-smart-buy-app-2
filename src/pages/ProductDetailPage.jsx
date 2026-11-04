@@ -1,17 +1,26 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useCatalog } from '../context/CatalogContext'
 import { useCart } from '../context/CartContext'
 import { formatCurrency } from '../lib/pricing'
 import StockBadge from '../components/StockBadge'
+import { expressPay, getFeatures } from '../lib/api'
 
 export default function ProductDetailPage() {
   const { id } = useParams()
-  const { getProduct, categories, loading } = useCatalog()
+  const { getProduct, categories, loading, refreshProducts } = useCatalog()
   const { addToCart } = useCart()
   const navigate = useNavigate()
   const [quantity, setQuantity] = useState(1)
   const [added, setAdded] = useState(false)
+  const [expressAvailable, setExpressAvailable] = useState(false)
+  const [express, setExpress] = useState({ busy: false, message: null, error: null })
+
+  useEffect(() => {
+    getFeatures()
+      .then((f) => setExpressAvailable(Boolean(f?.expressPay)))
+      .catch(() => setExpressAvailable(false))
+  }, [])
 
   const product = getProduct(id)
 
@@ -37,6 +46,25 @@ export default function ProductDetailPage() {
   function handleAddToCart() {
     addToCart(product.id, quantity)
     setAdded(true)
+  }
+
+  async function handleExpressPay() {
+    setExpress({ busy: true, message: null, error: null })
+    try {
+      const order = await expressPay([{ productId: product.id, quantity }])
+      setExpress({
+        busy: false,
+        message: `Express order placed: #${order.id.slice(0, 8)} for ${formatCurrency(order.total)}. Shipped to your last address.`,
+        error: null,
+      })
+      refreshProducts().catch(() => {})
+    } catch (err) {
+      setExpress({
+        busy: false,
+        message: null,
+        error: err.status === 401 ? 'Sign in to use Express Pay.' : err.message || 'Express Pay failed.',
+      })
+    }
   }
 
   return (
@@ -80,7 +108,16 @@ export default function ProductDetailPage() {
               </button>
             )}
           </div>
+          {expressAvailable && product.stock > 0 && (
+            <div className="button-row">
+              <button className="btn btn-secondary" disabled={express.busy} onClick={handleExpressPay}>
+                {express.busy ? 'Placing order…' : 'Express Pay (1-click)'}
+              </button>
+            </div>
+          )}
           {added && <p className="confirmation-banner">Added to cart!</p>}
+          {express.message && <p className="confirmation-banner">{express.message}</p>}
+          {express.error && <div className="alert alert-error">{express.error}</div>}
         </div>
       </div>
     </div>

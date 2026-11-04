@@ -33,6 +33,14 @@ export function getOrder(id) {
   return request(`/orders/${encodeURIComponent(id)}`)
 }
 
+export function getFeatures() {
+  return request('/features')
+}
+
+export function expressPay(items) {
+  return request('/orders/express', { method: 'POST', body: JSON.stringify({ items }) })
+}
+
 export function placeOrder(payload) {
   return request('/orders', { method: 'POST', body: JSON.stringify(payload) })
 }
